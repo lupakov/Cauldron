@@ -29,8 +29,12 @@ public class Action {
 	private int getFrmtIdByName(String name) {
 		switch(name) {
 		case "ММ":
+		case "Сеть ММ":
+		case "Сеть МД":
 		case "МД":return 1;
+		case "Сеть ГМ":
 		case "ГМ":return 2;
+		case "Сеть МК":
 		case "МК":return 3;
 		default: return 0;
 		}
