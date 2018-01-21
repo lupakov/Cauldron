@@ -1,12 +1,17 @@
 package ru.magnit.co.tmp;
 
+import java.io.File;
 import java.util.ArrayList;
 
 public class Template {
 	private ArrayList<Action> list;
 	private int id;
 	private String name;
-	private String path;
+	private File file;
+	public Template(File file) {
+		this.file = file;
+		this.name = file.getName();
+	}
 	public int getId() {
 		return id;
 	}
@@ -18,6 +23,9 @@ public class Template {
 	}
 	public void setName(String name) {
 		this.name = name;
+	}
+	public void fillData() {
+		
 	}
 	
 }
