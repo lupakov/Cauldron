@@ -16,6 +16,15 @@ import org.xml.sax.helpers.XMLReaderFactory;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.sql.BatchUpdateException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.SQLWarning;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -37,16 +46,37 @@ public class XlsxReader {
 	
 	ArrayList<String> list;
 	Map<String, String> fields = new HashMap<String, String>();
-	public XlsxReader(File file) throws InvalidFormatException {
+	public XlsxReader(File file) throws InvalidFormatException, SQLException {
+	
+        String conStr = "jdbc:teradata://192.168.0.105/CHARSET=UTF16"
+                +",DATABASE=PRICING_SALE,TMODE=ANSI,TYPE=FASTLOAD";
+        Connection con = DriverManager.getConnection(conStr,"dbc","dbc");
+        
+
+        String tableDest;
+        tableDest = "pricing_sale._import_couldron";
+        
 		pk = OPCPackage.open(file);
 		list = new ArrayList<String>();
 		XSSFReader xssfReader = null;
+		
+		
+		
         try {
             xssfReader = new XSSFReader(pk);
+            Statement stmtDest = con.createStatement();
+            stmtDest.executeQuery("create  multiset table "+tableDest+ " (art_code varchar(20), whs_code varchar(20), begin_dt varchar(10), end_dt varchar(10), suma_begin_dt varchar(10), suma_end_dt varchar(10), frmt varchar(10), action_price varchar(20), fix_price varchar(20), fix_discount varchar(20)) primary index(art_code, whs_code) ");
+            stmtDest.close();            
 
         StylesTable styles = xssfReader.getStylesTable();
             ReadOnlySharedStringsTable strings = null;
             try {
+            	  con.clearWarnings();            
+                  String prep = "insert into "+ tableDest
+                      + " values (?,?,?,?,?,?,?,?,?,?)"; 
+
+                  con.setAutoCommit(false);
+                  PreparedStatement pStmtDest = con.prepareStatement(prep);  
                 strings = new ReadOnlySharedStringsTable(pk);
 
             XSSFReader.SheetIterator iter = (XSSFReader.SheetIterator) xssfReader.getSheetsData();
@@ -57,7 +87,10 @@ public class XlsxReader {
                     InputStream stream=iter.next();
 
                     ContentHandler handler = new XSSFSheetXMLHandler(styles, strings, new XSSFSheetXMLHandler.SheetContentsHandler() {
-                        @Override
+                        int c = 5000;
+                        int cc = 0; 	
+                    	
+                    	@Override
                         public void startRow(int i) {
                         	//System.out.println("row number :"+ i);
                         	if(i == 0) {
@@ -88,12 +121,76 @@ public class XlsxReader {
                         		//System.out.println("row number :"+ i);
                         		checkTitle();
                         	}
-                        	showVar();
+                        	else {
+	                        	showVar();
+	                        	try {
+									pStmtDest.setString(1, art_code);
+									pStmtDest.setString(2, whs_code);
+									pStmtDest.setString(3, begin_dt);
+									pStmtDest.setString(4, end_dt);
+									pStmtDest.setString(5, suma_begin_dt);
+									pStmtDest.setString(6, suma_end_dt);
+									pStmtDest.setString(7, frmt);
+									pStmtDest.setString(8, action_price);
+									pStmtDest.setString(9, fix_price);
+									pStmtDest.setString(10, fix_discount);
+									pStmtDest.addBatch();
+									
+									cc++;
+				                        if (cc == c){
+				                            SQLWarning w = con.getWarnings();
+				                            while(w != null){
+				                                System.out.println("*** SQL Warnings caught ***");
+				                                StringWriter sw = new StringWriter();
+				                                w.printStackTrace(new PrintWriter(sw,true));
+				                                System.out.println("SQL State = " + w.getSQLState()
+				                                + ", Error Code = " + w.getErrorCode()
+				                                + "\n" + sw.toString());
+				                                w = w.getNextWarning();
+				                            }
+				                            try {
+				                                int arrInsert[] = pStmtDest.executeBatch();
+				                                }
+				                                catch (BatchUpdateException e){
+				                                    System.out.println("Our ex");
+				                                     for (SQLException ex = e ; ex != null ; ex = ex.getNextException())
+				                                            if(ex.getErrorCode() != 1339) ex.printStackTrace () ;
+				                                }
+				                                catch(Exception e){
+				                                    System.out.println("Other Exception");
+				                                    System.out.println(e.getMessage());
+				                                }        
+				                            cc = 0;
+				                            System.out.println("ku ku");
+				                        }
+									
+									
+				             	
+									
+									
+								} catch (SQLException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								}
+	                        	
+	                            try {
+	                                int arrInsert[] = pStmtDest.executeBatch();
+	                                }
+	                                catch (BatchUpdateException e){
+	                                    System.out.println("Our ex");
+	                                     for (SQLException ex = e ; ex != null ; ex = ex.getNextException())
+	                                            if(ex.getErrorCode() != 1339) ex.printStackTrace () ;
+	                                }
+	                                catch(Exception e){
+	                                    System.out.println("Other Exception");
+	                                    System.out.println(e.getMessage());
+	                                }
+                        	}
                         	
                         }
 
                         private void showVar() {
-							System.out.println(art_code + " "+ whs_code + " "+begin_dt +" "+end_dt+" "+frmt+" "+ action_price);
+							//System.out.println(art_code + " "+ whs_code + " "+begin_dt +" "+end_dt+" "+frmt+" "+ action_price);
 							
 						}
 
@@ -104,16 +201,16 @@ public class XlsxReader {
                         	}
 
                             list.add(s1);
-                            System.out.println(s1);
-                            System.out.println(s);
+                           // System.out.println(s1);
+                           // System.out.println(s);
                             parseString(s,s1);
                             
                         }
 
                         @Override
                         public void headerFooter(String s, boolean b, String s1) {
-                            System.out.println("headerFooter "+s1);
-                            System.out.println("headerFooter "+ s);
+                           // System.out.println("headerFooter "+s1);
+                          //  System.out.println("headerFooter "+ s);
                             
                         }
                     }, true);
@@ -126,6 +223,10 @@ public class XlsxReader {
                    
 
         }
+            con.commit();
+            pStmtDest.close();
+            con.close();
+            
             } catch (SAXException e) {
                 e.printStackTrace();
             }
@@ -139,7 +240,7 @@ public class XlsxReader {
 	
 	public void parseString(String adr, String val) {
 		String col = adr.replaceAll("[0-9]", "");
-		System.out.println("col = "+col);
+		//System.out.println("col = "+col);
 		if (col.equals(fields.get("artCode"))) {
 			art_code = val;
 		}
@@ -175,7 +276,7 @@ public class XlsxReader {
 	}
 	public void parseTitle(String adr, String val) {
 		String col = adr.replaceAll("[0-9]", "");
-		System.out.println(val.toUpperCase());
+		//System.out.println(val.toUpperCase());
 		if (val.toUpperCase() == " Œƒ ““") {
 			
 			fields.put("whsCode", col);
@@ -210,7 +311,7 @@ public class XlsxReader {
 		else if (val.toUpperCase().equals("‘» —»–Œ¬¿ÕÕ¿ﬂ — »ƒ ¿")) {
 			fields.put("fixDiscount", col);
 		}
-		System.out.println(fields);
+		//System.out.println(fields);
 	}
 	
 	public void checkTitle() {
@@ -241,4 +342,14 @@ public class XlsxReader {
 		}	
 		
 	}
+    public static String getQuestionMark (int cnt)
+    {
+            String resString = "";
+            for (int i = 1; i <= cnt; i++) {
+                    resString = resString + "?,";
+            }
+            resString = resString.substring(0, resString.length()-1);
+
+            return resString;
+    }
 }
