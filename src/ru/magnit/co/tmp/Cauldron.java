@@ -1,6 +1,7 @@
 package ru.magnit.co.tmp;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -15,18 +16,24 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
+
 public class Cauldron {
 	private Path path;
+	private ArrayList<String> messageList;
 	private Path goodDirectory;
 	private Path badDirectory;
 	private ArrayList<File> templates;
-	public Cauldron(Path path, Path goodDirectory, Path badDirectory) {
+	private DestConnnection connection;
+	public Cauldron(Path path, Path goodDirectory, Path badDirectory) throws FileNotFoundException, IOException {
 		this.setPath(path);
 		this.setGoodDirectory(goodDirectory);
 		this.setBadDirectory(badDirectory);
 		this.templates =  this.getListFiles();
+		connection = new DestConnnection();
+		messageList = new ArrayList<String>();
 	}
-	public Cauldron(String path) {
+	public Cauldron(String path) throws FileNotFoundException, IOException {
 		this(Paths.get(path),Paths.get(path,"Good"), Paths.get(path, "Bad"));
 	}
 
@@ -39,10 +46,24 @@ public class Cauldron {
 	public void setPath(String path) {
 		this.path = Paths.get(path);
 	}
-	public void cook() {
-		for (final File f : this.templates) {
-		//	Template tmplt = new Template(f);
-		//	tmplt.save()
+	public void cook() throws SQLException, IOException, InvalidFormatException {
+		try(Connection con = connection.getConnection()){
+			ArrayList<String> curTemplates = getCurrentTemplate(con);
+			for (final File f : this.templates) {
+				if(curTemplates.contains(f.getName())) {
+					moveToBad(f.getPath());
+					messageList.add("Ошибка: Шаблон "+f.getName()+" уже добавлен");
+					continue;
+				}
+				try {
+				Template t = new Template(f, connection);
+				
+				}
+				catch (Exception e){
+					messageList.add(e.getMessage());
+					
+				}
+			}
 		}
 	}
 
